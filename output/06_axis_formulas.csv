@@ -1,0 +1,6 @@
+axis,axis_no,formula
+pco2,2,pco2 ~ turb + temp + nh3 + temp:nh3 + ph2:temp + ph2
+pco3,3,pco3 ~ temp + toc + temp:toc + turb + temp:turb + log_chla + vel + log_temp
+pco4,4,pco4 ~ temp + toc + temp:toc + cod + temp:cod + cfpom + temp:cfpom + turb
+pco5,5,pco5 ~ ph2 + cod
+pco6,6,pco6 ~ do + do:temp + temp

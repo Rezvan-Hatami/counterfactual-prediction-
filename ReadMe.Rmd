@@ -1,0 +1,166 @@
+---
+title: "README for the reproducible R workflow supporting: A causal modelling workflow for spatiotemporal ecological impact assessment with quantified counterfactual prediction of intervention effects"
+author: "Rezvan Hatami"
+date: "7 April 2026"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE
+)
+```
+
+# Overview
+
+This repository contains the full Three Mile Creek causal-analysis workflow implemented as a modular 20-script R pipeline. The workflow begins with raw-data assembly and ordination, proceeds through spatiotemporal modelling and environmental structural-equation development, evaluates structural sufficiency through d-separation testing, and culminates in counterfactual intervention analysis. Each script executes a defined analytical stage, writes named outputs to the `output/` directory, and saves its figures in a script-specific folder under `figures/`.
+
+# Project structure
+
+The project root contains the folders `data/`, `output/`, `figures/`, `scripts/`, and the project-level files used to manage the workflow. Raw data tables are stored in `data/`. Intermediate analysis objects, summaries, and saved model states are written to `output/`. Figure products are written to numbered subfolders such as `figures/01`, `figures/03`, `figures/10`, and `figures/20`, so that figure lineage remains explicitly tied to the script that generated it. This structure preserves traceability across the entire workflow.
+
+# Execution order
+
+Run the scripts in numerical order so that the required upstream `.rds` objects are available to later stages. The intended run order is:
+
+`01 -> 02 -> 03 -> 04 -> 05 -> 06 -> 07 -> 08 -> 09 -> 10 -> 11 -> 12 -> 13 -> 14 -> 15 -> 16 -> 17 -> 18 -> 19 -> 20`
+
+This order reflects the analytical logic of the pipeline, beginning with data preparation, passing through community and environmental model development, then structural testing, and finally counterfactual propagation.
+
+# Technical notes
+
+Each script contains its own package checks, path setup, and folder creation. Several scripts rebuild compatible numeric fields internally, reconstruct `time` from `day` when required, and save intermediate analysis states as `.rds` objects for downstream use. Script 19 includes a compatibility patch for the current `dagR` installation: the legacy `DAG()` constructor is unavailable, so manual DAG reconstruction and automatic basis-set generation are skipped, while the d-separation regression tests, benthic-community residual capscale checks, and Fisher's C calculation continue to run.
+
+# Script-by-script workflow
+
+## Script 01. `01_EDA_environmental_plots.R`
+
+This script is the empirical entry point of the workflow. It reads the raw biological, environmental, and diversity tables from `data/`, prepares the core data objects, and produces the early exploratory environmental figures. It writes the standardised downstream inputs `01_wangbug_raw.rds`, `01_wangenv_prepped.rds`, and `01_diversity_raw.rds`, and saves figure products in `figures/01/`.
+
+The raw inputs expected by this script are `wangbug.csv`, `wangenv.csv`, and `diversity.csv` in the `data/` folder. The saved outputs from this script are used throughout the later pipeline, including the ordination, spatiotemporal, interpretation, and causal-testing stages.
+
+## Script 02. `02_pco_diagnostics.R`
+
+This script performs the community-data reduction stage. It computes Bray-Curtis dissimilarity from square-root transformed abundance data, runs Principal Coordinates Analysis with correction for negative eigenvalues, evaluates axis structure using broken-stick, bootstrap, and permutation diagnostics, and combines the retained PCO scores with the environmental table. It writes the core ordination objects `02_wangbug_BC.rds`, `02_pwangbug_scores.rds`, `02_bugenv_with_pco.rds`, and `02_pco_diagnostics.rds`, with figure outputs saved in `figures/02/`.
+
+This script reads `01_wangbug_raw.rds` and `01_wangenv_prepped.rds` from Script 01. Its saved outputs are required for the main spatiotemporal community model and for multiple downstream interpretation and environmental stages.
+
+## Script 03. `03_dbRDA_space_time_variable.R`
+
+This script constructs the spatiotemporal community-model layer of the workflow. It combines environmental data and retained PCO scores into a common analysis table, fits the main dbRDA space-time-effluent model and its reduced comparison, derives fitted and residual PCO components, builds prediction grids, and generates the main spatial, temporal, fitted, and residual figures in `figures/03/`. It also writes the saved state required for the subsequent environmental and causal stages.
+
+This script reads the prepared biological and environmental objects from Script 01 together with the ordination outputs from Script 02. It provides the central spatiotemporal analysis state used by the environmental screening, structural-equation, and interpretation stages.
+
+## Script 04. `04_environmental_screening.R`
+
+This script screens candidate environmental variables against the principal community axes. It uses grouped scatterplot matrices, transformed-variable views, and structured correlation summaries to identify candidate predictors for the environmental modelling stage. Figure products are written to `figures/04/`, and screening summaries are written to `output/`.
+
+This script reads `03_environmental_script_inputs.rds` from Script 03 and prepares the candidate environmental field used by Script 05.
+
+## Script 05. `05_environmental_dbrda_models.R`
+
+This script formalises the environmental layer of the community-response model. It refits the main spatiotemporal dbRDA reference model, filters the complete-case environmental subset, fits candidate environmental models for individual ordination axes, evaluates environmental explanation of community pattern, and tests whether spatiotemporal structure remains after conditioning on selected environmental predictors. Figures are written to `figures/05/`.
+
+This script reads `03_environmental_script_inputs.rds` together with `data/wangenvOutliers.csv`. It forms the bridge between screening and multidimensional environmental specification.
+
+## Script 06. `06_environmental_pco2_to_pco6_pattern_modelling.R`
+
+This script extends environmental pattern modelling across the higher retained ordination axes. It fits axis-specific environmental models for PCO2 to PCO6, compares observed, spatiotemporal, and environmental patterns, and saves summaries, model objects, and publication-ready figures in `figures/06/`. This stage completes the multiaxial environmental representation of the reduced community space.
+
+This script reads `03_environmental_script_inputs.rds` from Script 03.
+
+## Script 07. `07_biotic_indices.R`
+
+This script interprets the retained ordination structure in biological terms. It calculates biotic indices, including Shannon diversity, relates diversity and selected taxa to PCO axes, and produces spatial plots and heat maps for biological interpretation. Outputs are saved to `output/` and `figures/07/`.
+
+This script reads `03_environmental_script_inputs.rds`, `01_wangenv_prepped.rds`, `01_wangbug_raw.rds`, `02_pwangbug_scores.rds`, and `01_diversity_raw.rds`. It contributes the biological-interpretation layer of the supported framework.
+
+## Script 08. `08_pco_grouped_community_heatmaps.R`
+
+This script isolates the grouped community-heatmap workflow. It rebuilds the species clustering tree, groups samples by PCO deciles, aggregates community composition within grouped intervals, and writes the ordered heat maps required for interpretation to `figures/08/`. This script provides the grouped visualisation of assemblage turnover along the retained ordination gradients.
+
+This script reads `01_wangbug_raw.rds` and `02_pwangbug_scores.rds`.
+
+## Script 09. `09_landuse_screening_and_models.R`
+
+This script extends the explanatory field beyond local physicochemical structure by screening land-use variables and landscape context. It reproduces the land-use screening workflow, grouped scatterplot-matrix checks, and land-use/environmental screening models in a self-sufficient form. Figure outputs are written to `figures/09/`, with analytical summaries printed to the console.
+
+This script reads `03_environmental_script_inputs.rds` and `01_wangenv_prepped.rds`.
+
+## Script 10. `10_chlorophyll_a_models_and_figures.R`
+
+This script builds the chlorophyll a structural-equation block. It performs exploratory pair checks, fits candidate chlorophyll models, develops the selected environmental equation, and produces the associated figures in `figures/10/`. This script is one of the variable-specific child-node modules that convert the causal graph into a fitted environmental network.
+
+This script reads `01_wangenv_prepped.rds`, `02_bugenv_with_pco.rds`, and `03_environmental_script_inputs.rds`.
+
+## Script 11. `11_nitrate_models_and_figures.R`
+
+This script builds the nitrate structural-equation block. It performs scatterplot checks, fits nitrate regressions, fits the nitrate spatiotemporal and environmental forms, and produces the corresponding figures in `figures/11/`.
+
+This script reads `01_wangenv_prepped.rds`, `02_bugenv_with_pco.rds`, and `03_environmental_script_inputs.rds`.
+
+## Script 12. `12_total_phosphorus_models_and_figures.R`
+
+This script builds the total phosphorus structural-equation block. It performs exploratory checks, fits TP regressions, develops the spatiotemporal and environmental model forms, and writes the associated figures to `figures/12/`.
+
+This script reads `01_wangenv_prepped.rds`, `02_bugenv_with_pco.rds`, and `03_environmental_script_inputs.rds`.
+
+## Script 13. `13_alkalinity_models_and_figures.R`
+
+This script builds the alkalinity structural-equation block. It performs exploratory checks, fits alkalinity regressions, compares candidate spatiotemporal structures, fits the selected alkalinity model, and writes the corresponding figures to `figures/13/`.
+
+This script reads `01_wangenv_prepped.rds`, `02_bugenv_with_pco.rds`, and `03_environmental_script_inputs.rds`.
+
+## Script 14. `14_turbidity_models_and_figures.R`
+
+This script builds the turbidity structural-equation block. It performs exploratory checks, fits turbidity regressions, fits the turbidity spatiotemporal model, and writes the relevant prediction and diagnostic figures to `figures/14/`.
+
+This script reads `01_wangenv_prepped.rds`, `02_bugenv_with_pco.rds`, and `03_environmental_script_inputs.rds`.
+
+## Script 15. `15_toc_models_and_figures.R`
+
+This script builds the total organic carbon structural-equation block. It performs exploratory checks, fits TOC regressions, develops the spatiotemporal and environmental model forms, and writes the resulting figures to `figures/15/`.
+
+This script reads `01_wangenv_prepped.rds`, `02_bugenv_with_pco.rds`, and `03_environmental_script_inputs.rds`.
+
+## Script 16. `16_conductivity_models_and_figures.R`
+
+This script builds the conductivity structural-equation block. It performs exploratory checks, fits conductivity regressions, develops the conductivity spatiotemporal and environmental model forms, and writes the corresponding figures to `figures/16/`.
+
+This script reads `01_wangenv_prepped.rds`, `02_bugenv_with_pco.rds`, and `03_environmental_script_inputs.rds`.
+
+## Script 17. `17_water_temperature_models_and_figures.R`
+
+This script builds the water-temperature structural-equation block. It performs exploratory checks, fits spatiotemporal and environmental temperature models, evaluates residual structure, and writes the corresponding figures to `figures/17/`, including the figure panel for water temperature.
+
+This script reads `01_wangenv_prepped.rds`, `02_bugenv_with_pco.rds`, and `03_environmental_script_inputs.rds`.
+
+## Script 18. `18_other_structural_equations.R`
+
+This script groups the remaining structural-equation components that were retained together in the reconstructed workflow. In the supplied version it includes pH and zinc modelling blocks and their associated figures, written to `figures/18/`.
+
+This script reads `01_wangenv_prepped.rds`, `02_bugenv_with_pco.rds`, and `03_environmental_script_inputs.rds`.
+
+## Script 19. `19_d_separation_statements.R`
+
+This script performs the structural-sufficiency stage of the workflow. It reads the assembled analysis state, runs d-separation regression tests across the network, applies residual capscale checks for conditional-independence claims involving the benthic-community component, and calculates Fisher's C as the global model-fit test for the composite causal structure. This stage determines whether the linked equation system can be retained for counterfactual propagation.
+
+This script reads `01_wangbug_raw.rds`, `01_wangenv_prepped.rds`, and `03_environmental_script_inputs.rds`.
+
+## Script 20. `20_counterfactual analysis_paper.R`
+
+This script executes the counterfactual stage of the workflow. It applies intervention scenarios to discharge-related inputs, propagates those perturbations through linked environmental equations, and generates the counterfactual predicted profiles that form the principal analytical outputs of the study. In multi-step chains, upstream environmental predictions are passed into downstream equations before the final biological response is obtained. The original supporting text supplied with the project shows this propagation logic explicitly for conductivity, TOC, and chlorophyll a counterfactual sequences.
+
+# Inputs expected in `data/`
+
+The workflow expects the raw input tables required by the early scripts to be available in `data/`. At minimum, these include `wangbug.csv`, `wangenv.csv`, and `diversity.csv`, together with any auxiliary source tables referenced by later scripts such as `wangenvOutliers.csv`.
+
+# Reproducibility statement
+
+This project was designed so that each analytical stage is independently executable, each important output is named and saved explicitly, and each figure folder corresponds to one computational module. The resulting file structure preserves inferential order, script-level traceability, and figure-level traceability across the full workflow, from raw-data ingestion to supported-model evaluation and counterfactual prediction.

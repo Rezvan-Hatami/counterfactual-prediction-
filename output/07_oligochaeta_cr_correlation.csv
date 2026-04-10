@@ -1,0 +1,2 @@
+response,predictor,estimate,statistic,p_value,method
+oligochaeta,cr,0.005076826675931763,0.031296064769391736,0.9751972310479815,Pearson's product-moment correlation
